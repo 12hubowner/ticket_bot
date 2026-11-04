@@ -10,8 +10,7 @@ from aiohttp import web
 # ==========================================
 TOKEN = os.environ.get("TICKET_BOT_TOKEN")
 TARGET_GUILD_ID = int(os.environ.get("TARGET_GUILD_ID", "1451327295682777151"))
-
-STAFF_ROLE_NAME = "Staff"
+STAFF_ROLE_ID = 1567348988284248064
 TICKETS_CATEGORY_NAME = "Tickets"
 
 intents = discord.Intents.default()
@@ -29,7 +28,7 @@ async def get_or_create_tickets_category(guild):
     return await guild.create_category(TICKETS_CATEGORY_NAME, reason="Ticket system")
 
 def get_staff_role(guild):
-    return discord.utils.get(guild.roles, name=STAFF_ROLE_NAME)
+    return guild.get_role(STAFF_ROLE_ID)
 
 # ─── views ──────────────────────────────────────────────────
 class OpenTicketView(discord.ui.View):
@@ -139,7 +138,6 @@ async def on_ready():
 
     guild_obj = discord.Object(id=TARGET_GUILD_ID)
     
-    # 1. Force sync to the specific guild (Instantly shows up in your server)
     try:
         tree.copy_global_to(guild=guild_obj)
         synced = await tree.sync(guild=guild_obj)
@@ -147,7 +145,6 @@ async def on_ready():
     except Exception as e:
         print(f"[!] Guild sync failed: {e}")
 
-    # 2. Global sync (Takes up to 1 hour, but ensures it's everywhere)
     try:
         await tree.sync()
         print("[+] Global sync sent.")
