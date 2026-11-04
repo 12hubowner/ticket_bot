@@ -3,15 +3,17 @@ from discord import app_commands
 import os
 import asyncio
 import time
+from aiohttp import web
 from dotenv import load_dotenv
 
-# Load token securely from .env
+# Load token securely from Railway Environment Variables
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 STAFF_ROLE_NAME = "Staff"
 TICKETS_CATEGORY_NAME = "Tickets"
 AUTO_CLOSE_SECONDS = 86400  # 1 day = 24 hours
+PORT = int(os.environ.get("PORT", 8080))
 
 intents = discord.Intents.default()
 intents.guilds = True
@@ -126,7 +128,7 @@ async def auto_close_tickets():
                         continue
                     
                     try:
-                        last_message = await channel.history(limit=1).flatten()
+                        last_message = [msg async for msg in channel.history(limit=1)]
                         if last_message:
                             last_msg_time = last_message[0].created_at.timestamp()
                             current_time = time.time()
@@ -142,7 +144,6 @@ async def auto_close_tickets():
         except Exception as e:
             print(f"[Auto-Close] Loop error: {e}")
             
-        # Wait 5 minutes before checking again
         await asyncio.sleep(300)
 
 # ─── COMMANDS ───────────────────────────────────────────────────────
@@ -154,7 +155,7 @@ async def panel_cmd(interaction: discord.Interaction):
     await interaction.channel.send(embed=embed, view=OpenTicketView())
     await interaction.response.send_message("Panel posted.", ephemeral=True)
 
-# ─── STARTUP ────────────────────────────────────────────────────────
+# ─── STARTUP (WITH RAILWAY WEB SERVER) ──────────────────────────────
 
 @client.event
 async def on_ready():
@@ -162,7 +163,7 @@ async def on_ready():
     client.add_view(OpenTicketView())
     client.add_view(TicketActionView())
     
-    # FIX: Use asyncio.create_task instead of client.loop.create_task
+    # Start the auto-close task
     asyncio.create_task(auto_close_tickets())
     print("[+] Auto-close task started (24h inactivity)")
     
@@ -172,5 +173,22 @@ async def on_ready():
     except Exception as e:
         print(f"[!] sync failed: {e}")
 
+# Simple web server just to keep Railway happy
+async def handle_ping(request):
+    return web.Response(text="Bot is alive!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    print(f"[+] Web server listening on port {PORT}")
+
+async def main():
+    await start_web_server()
+    await client.start(TOKEN)
+
 if __name__ == "__main__":
-    client.run(TOKEN)
+    asyncio.run(main())
