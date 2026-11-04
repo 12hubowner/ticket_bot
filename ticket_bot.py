@@ -78,7 +78,6 @@ class OpenTicketView(discord.ui.View):
         user = interaction.user
         tickets_cat = await get_or_create_tickets_category(guild)
         
-        # Check for existing ticket
         for ch in tickets_cat.text_channels:
             if ch.topic and f"ticket-owner:{user.id}" in ch.topic:
                 return await interaction.response.send_message(f"You already have an open ticket: {ch.mention}", ephemeral=True)
@@ -113,7 +112,6 @@ async def auto_close_tickets():
     while not client.is_closed():
         try:
             for guild in client.guilds:
-                # Find the tickets category
                 tickets_cat = None
                 for cat in guild.categories:
                     if cat.name == TICKETS_CATEGORY_NAME:
@@ -123,19 +121,16 @@ async def auto_close_tickets():
                 if not tickets_cat:
                     continue
 
-                # Check every ticket in the category
                 for channel in tickets_cat.text_channels:
                     if not channel.topic or "ticket-owner:" not in channel.topic:
                         continue
                     
-                    # Fetch the last message to check activity
                     try:
                         last_message = await channel.history(limit=1).flatten()
                         if last_message:
                             last_msg_time = last_message[0].created_at.timestamp()
                             current_time = time.time()
                             
-                            # If inactive for more than 24 hours, close it
                             if current_time - last_msg_time > AUTO_CLOSE_SECONDS:
                                 print(f"[Auto-Close] Closing inactive ticket: {channel.name}")
                                 await channel.send("⏰ This ticket has been inactive for 24 hours and will now be closed automatically.")
@@ -147,7 +142,7 @@ async def auto_close_tickets():
         except Exception as e:
             print(f"[Auto-Close] Loop error: {e}")
             
-        # Wait 5 minutes before checking again to avoid rate limits
+        # Wait 5 minutes before checking again
         await asyncio.sleep(300)
 
 # ─── COMMANDS ───────────────────────────────────────────────────────
@@ -167,11 +162,10 @@ async def on_ready():
     client.add_view(OpenTicketView())
     client.add_view(TicketActionView())
     
-    # Start the auto-close background task
-    client.loop.create_task(auto_close_tickets())
+    # FIX: Use asyncio.create_task instead of client.loop.create_task
+    asyncio.create_task(auto_close_tickets())
     print("[+] Auto-close task started (24h inactivity)")
     
-    # Sync slash commands globally
     try:
         synced = await tree.sync()
         print(f"[+] Synced {len(synced)} slash command(s) globally")
